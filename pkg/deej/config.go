@@ -35,6 +35,8 @@ type CanonicalConfig struct {
 
 	userConfig     *viper.Viper
 	internalConfig *viper.Viper
+
+	ButtonBindings map[string]byte
 }
 
 const (
@@ -56,6 +58,8 @@ const (
 
 	defaultCOMPort  = "COM4"
 	defaultBaudRate = 9600
+
+	configKeyButtonBindings = "button_bindings"
 )
 
 // has to be defined as a non-constant because we're using path.Join
@@ -89,6 +93,7 @@ func NewConfig(logger *zap.SugaredLogger, notifier Notifier) (*CanonicalConfig, 
 	userConfig.SetDefault(configKeyInvertSliders, false)
 	userConfig.SetDefault(configKeyCOMPort, defaultCOMPort)
 	userConfig.SetDefault(configKeyBaudRate, defaultBaudRate)
+	userConfig.SetDefault(configKeyButtonBindings, map[string]byte{})
 
 	internalConfig := viper.New()
 	internalConfig.SetConfigName(internalConfigName)
@@ -238,6 +243,17 @@ func (cc *CanonicalConfig) populateFromVipers() error {
 
 	cc.InvertSliders = cc.userConfig.GetBool(configKeyInvertSliders)
 	cc.NoiseReductionLevel = cc.userConfig.GetString(configKeyNoiseReductionLevel)
+
+	buttonBindings := cc.userConfig.GetStringMap(configKeyButtonBindings)
+	cc.ButtonBindings = make(map[string]byte)
+
+	for key, value := range buttonBindings {
+		if byteValue, ok := value.(int); ok && byteValue <= 255 {
+			cc.ButtonBindings[key] = byte(byteValue)
+		} else {
+			cc.logger.Warnw("Invalid byte value for button binding", "button", key, "value", value)
+		}
+	}
 
 	cc.logger.Debug("Populated config fields from vipers")
 
