@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/jacobsa/go-serial/serial"
@@ -42,6 +43,35 @@ type SliderMoveEvent struct {
 }
 
 var expectedLinePattern = regexp.MustCompile(`^\d{1,4}(\|\d{1,4})*\r\n$`)
+var expectedButtonPress = regexp.MustCompile(`^[+-]?\d{0,4}\n$`)
+
+var (
+	user32          = syscall.NewLazyDLL("user32.dll")
+	procKeybd_event = user32.NewProc("keybd_event")
+)
+
+func keybd_event(bVk byte, bScan byte, dwFlags uint32, dwExtraInfo uintptr) {
+	procKeybd_event.Call(uintptr(bVk), uintptr(bScan), uintptr(dwFlags), dwExtraInfo)
+}
+
+const (
+	KEYEVENTF_KEYUP     = 0x0002
+	VK_MEDIA_PLAY_PAUSE = 0xB3
+	VK_MEDIA_NEXT_TRACK = 0xB0
+	VK_MEDIA_PREV_TRACK = 0xB1
+	VK_F13              = 0x7C
+	VK_F14              = 0x7D
+	VK_F15              = 0x7E
+	VK_F16              = 0x7F
+	VK_F17              = 0x80
+	VK_F18              = 0x81
+	VK_F19              = 0x82
+	VK_F20              = 0x83
+	VK_F21              = 0x84
+	VK_F22              = 0x85
+	VK_F23              = 0x86
+	VK_F24              = 0x87
+)
 
 // NewSerialIO creates a SerialIO instance that uses the provided deej
 // instance's connection info to establish communications with the arduino chip
@@ -108,6 +138,8 @@ func (sio *SerialIO) Start() error {
 
 	namedLogger.Infow("Connected", "conn", sio.conn)
 	sio.connected = true
+
+	sio.PrintButtonBindings()
 
 	// read lines or await a stop
 	go func() {
@@ -226,12 +258,53 @@ func (sio *SerialIO) readLine(logger *zap.SugaredLogger, reader *bufio.Reader) c
 	return ch
 }
 
+func (sio *SerialIO) PrintButtonBindings() {
+	for button, byteValue := range sio.deej.config.ButtonBindings {
+		sio.logger.Infof("Button: %s, Byte Value: %d (0x%X)", button, byteValue, byteValue)
+	}
+}
+
+func (sio *SerialIO) handleButtonPress(line string, logger *zap.SugaredLogger) {
+
+	line = strings.TrimSuffix(line, "\n")
+	action := line[1:]
+	pressed := line[0] == '+'
+
+	var vk byte
+	var found bool
+
+	for button, byteValue := range sio.deej.config.ButtonBindings {
+		if action == button {
+			vk = byteValue
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		logger.Warnf("No binding found for action: %s", action)
+		return // Exit if no matching action is found
+	}
+
+	if pressed {
+		logger.Debug(action + " pressed")
+		keybd_event(vk, 0, 0, 0) // Simulate key press
+	} else {
+		logger.Debug(action + " released")
+		keybd_event(vk, 0, KEYEVENTF_KEYUP, 0) // Simulate key release
+	}
+}
+
 func (sio *SerialIO) handleLine(logger *zap.SugaredLogger, line string) {
 
 	// this function receives an unsanitized line which is guaranteed to end with LF,
 	// but most lines will end with CRLF. it may also have garbage instead of
 	// deej-formatted values, so we must check for that! just ignore bad ones
+
 	if !expectedLinePattern.MatchString(line) {
+		if expectedButtonPress.MatchString(line) {
+			sio.handleButtonPress(line, logger)
+		}
 		return
 	}
 
