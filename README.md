@@ -1,3 +1,15 @@
+# Added button matrix recognition
+
+tried using midi to keyboard apps but they didn't do it for me. So found this code (THANKS!) and modified it a bit to recognise button presses.
+
+Does not work for linux, most likely (haven't tried).
+
+This is my first time working with other opensource projects, if something does not work, create an issue :) 
+
+**My release page [Releases](https://github.com/IceHawkey9588/deej/releases/tag/Latest)**
+
+# ORIGINAL README, ALL LINKS LINK TO THE MAIN BRANCH IF YOU WANT TO DOWNLOAD JUST SEE THE EXECUTABLE ABOVE!
+
 # deej
 
 deej is an **open-source hardware volume mixer** for Windows and Linux PCs. It lets you use real-life sliders (like a DJ!) to **seamlessly control the volumes of different apps** (such as your music player, the game you're playing and your voice chat session) without having to stop what you're doing.
